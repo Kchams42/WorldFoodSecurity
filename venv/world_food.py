@@ -1,10 +1,13 @@
 from itertools import count
+import re
+from turtle import left
 import numpy as np
 import pandas as pd
-import sklearn
-
-#Loading in both data sets, due to certian data types in the set a differernt encoding needed to be used.
-#Also due to the large size of the data set low_memory needed to be set to flase
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn import metrics
+from sklearn.preprocessing import LabelEncoder
 
 obese_df = pd.read_csv('FAOSTAT_data_7-18-2022.csv', encoding='ISO-8859-1', low_memory =  False)
 
@@ -12,41 +15,70 @@ undernourished_df= pd.read_csv('FAOSTAT_data_7-18-2022 (2).csv', encoding='ISO-8
 
 gross_production_df = pd.read_csv('FAOSTAT_data_7-18-2022 (1).csv',encoding='ISO-8859-1', low_memory =  False)
 
-#Many columns were not useful to this project, so those columns needed to be removed.  
-#Columns also used a fairly generic name(value), and the parameter for each value even though they were the same
-#I combined the value column with the descriptor.
-obese_usefull_columns = [3,  9, 11,]
+
+obese_usefull_columns = [11]
 obese_df = obese_df[obese_df.columns[obese_usefull_columns]]
-obese_df.rename(columns = {'Area' : 'Country', 'Value' : 'Obese Adults 18 and Over(millions)'}, inplace = True)
+obese_df.rename(columns = { 'Value' : 'Obese Adults 18 and Over(millions)'}, inplace = True)
 
 undernourished_usefull_columns = [11]
 undernourished_df = undernourished_df[undernourished_df.columns[undernourished_usefull_columns]]
 undernourished_df.rename (columns = {'Value' : 'Undernourished People (millions)'}, inplace = True)
 
-gross_production_usefull_columns = [9,11]
+gross_production_usefull_columns = [3, 9, 11]
 gross_production_df = gross_production_df[gross_production_df.columns[gross_production_usefull_columns]]
-gross_production_df.rename (columns = {'Value' : 'Total Agricultural Production (millions)'}, inplace= True)
+gross_production_df.rename (columns = {'Value' : 'Total Agricultural Production (millions)',  'Area' : 'Country'}, inplace= True)
 gross_production_df=gross_production_df.interpolate()
-print (gross_production_df.info())
 
-#Joining the 3 datasets together 
-combined_frames = [obese_df, undernourished_df, gross_production_df]
+
+
+combined_frames = [gross_production_df, obese_df]
 result_data = pd.concat(combined_frames, axis = 1)
+result_data.dropna(subset=['Country'], inplace=True)
+#print(result_data.head)
 
-#rearanging the columns
-year_column = result_data.pop('Year',)
-result_data.insert(1, 'Year', year_column)
-production_column = result_data.pop ('Total Agricultural Production (millions)')
-result_data.insert(2, 'Total Agricultural Production (millions)', production_column)
+le= preprocessing.LabelEncoder()
+#le.fit(result_data['Country'])
+#print(list(le.classes_))
+result_data['Country']= le.fit_transform(result_data['Country'])
+#print(result_data.head)
+#result_data = result_data
+result_data['Obese Adults 18 and Over(millions)'] = pd.to_numeric(result_data['Obese Adults 18 and Over(millions)'], errors= 'coerce')
+result_data['Obese Adults 18 and Over(millions)'].mask(result_data['Obese Adults 18 and Over(millions)'] >1 , 0)
+result_data['Obese Adults 18 and Over(millions)'] = le.fit_transform(result_data['Obese Adults 18 and Over(millions)'])
+
+x=result_data
+y=result_data['Obese Adults 18 and Over(millions)']
+
+X_train, X_test, y_train, y_test =train_test_split(x,y,test_size=.08 )
+lr = LogisticRegression(max_iter=1000)
+lr.fit(X_train,y_train)
+pred=lr.predict(X_test)
+print(metrics.accuracy_score(pred, y_test))
+print ()
+print (result_data.head())
+result_data['Country']=le.inverse_transform(result_data['Country'])
+result_data =  result_data
 
 
-print (result_data.info())
 
-#print (result_data.info())
 
-#step 1 fill/drop total agricultural production in the gross production data frame
-#step 2 using total agticultural production data frame use linear regression to fill obese and undernourished data frames
-#step 3 concat all 3 data frames
-#https://www.analyticsvidhya.com/blog/2021/05/dealing-with-missing-values-in-python-a-complete-guide/
-#https://python.plainenglish.io/predict-missing-dataframe-values-with-an-ml-algorithm-717cd872f1a8
-#https://www.kaggle.com/code/punit0811/linear-regression-with-titanic-dataset
+
+final_combined = [result_data, undernourished_df]
+final_data = pd.concat(final_combined, axis =1)
+final_data.dropna(subset=['Country'], inplace= True)
+final_data['Undernourished People (millions)'] = pd.to_numeric(final_data['Undernourished People (millions)'], errors= 'coerce')
+final_data['Undernourished People (millions)'].mask(final_data['Undernourished People (millions)'] >1, 0)
+final_data['Undernourished People (millions)'] = le.fit_transform(final_data['Undernourished People (millions)'])
+x=final_data
+print(final_data.isna)
+y=final_data['Undernourished People (millions)']
+X_train, X_test, y_train, y_test =train_test_split(x,y,test_size=.08 )
+lr = LogisticRegression(max_iter=1000)
+lr.fit(X_train,y_train)
+pred=lr.predict(X_test)
+print(metrics.accuracy_score(pred, y_test))
+print ()
+
+print (final_data.head())
+
+
